@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 .PHONY: clean rust-build rust-test rust-lint
 
-RUST_CRATES := echo
+RUST_CRATES := echo glint
 
 rust-build:
 	@for crate in $(RUST_CRATES); do \
@@ -20,4 +20,4 @@ rust-lint:
 	done
 
 clean:
-	rm -rf dist build echo/target containers/dist
+	rm -rf dist build echo/target glint/target containers/dist

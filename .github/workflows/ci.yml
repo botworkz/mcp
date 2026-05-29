@@ -22,6 +22,7 @@ jobs:
       with:
         workspaces: |
           echo
+          glint
     - run: make rust-lint
     - run: make rust-test
     - run: make rust-build

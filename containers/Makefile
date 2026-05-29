@@ -5,7 +5,7 @@ SHELL := /bin/bash
 VERSION := $(shell [ -f ../VERSION ] && tr -d '[:space:]' < ../VERSION || echo 0.0.0-dev)
 GHCR_PREFIX := ghcr.io/botworkz/mcp
 
-SERVICES := mcp-echo
+SERVICES := mcp-echo mcp-glint
 
 .PHONY: containers tarballs clean $(SERVICES)
 
@@ -19,6 +19,13 @@ endef
 containers: $(SERVICES)
 
 mcp-echo:
+	docker build \
+		-t botwork/$@:local \
+		-f $@/Dockerfile \
+		..
+	$(call tag_image,$@)
+
+mcp-glint:
 	docker build \
 		-t botwork/$@:local \
 		-f $@/Dockerfile \
