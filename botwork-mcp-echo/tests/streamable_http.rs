@@ -11,7 +11,7 @@ fn extract_jsonrpc_sse_payload(body: &str) -> serde_json::Value {
             }
         }
     }
-    panic!("SSE payload includes a data line")
+    panic!("SSE payload does not include a valid data line")
 }
 
 #[tokio::test]
