@@ -1,0 +1,22 @@
+# Python build artifacts
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+.eggs/
+
+# Tool caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+/.venv-wheelbuild/
+
+# Rust build artifacts
+/botwork-mcp-echo/target/
