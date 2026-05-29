@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 use botwork_mcp_glint::{init_logging, serve_with_listener};
 use serde_json::json;
 use std::{fs, os::unix::fs::PermissionsExt};

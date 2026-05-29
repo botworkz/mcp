@@ -255,6 +255,7 @@ mod tests {
         assert!(err.to_string().contains("must not start with '-'"));
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn run_glint_captures_stdout_with_fake_binary() {
         unsafe {
