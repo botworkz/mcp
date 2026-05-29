@@ -20,3 +20,4 @@ env/
 
 # Rust build artifacts
 /echo/target/
+/glint/target/

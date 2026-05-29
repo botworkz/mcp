@@ -1,0 +1,26 @@
+[package]
+name = "botwork-mcp-glint"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "botwork-mcp-glint"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+axum = "0.8"
+http = "1"
+rmcp = { version = "0.17.0", default-features = false, features = ["server", "transport-streamable-http-server", "macros", "schemars"] }
+schemars = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde_json = "1.0"
+tempfile = "3"

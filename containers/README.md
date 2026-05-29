@@ -1,8 +1,9 @@
 # Containers
 
-`botworkz/mcp` builds one container image:
+`botworkz/mcp` builds container images:
 
 - `mcp-echo`: Rust [`rmcp`](https://crates.io/crates/rmcp) echo server image.
+- `mcp-glint`: Rust MCP server wrapping the `glint` whitespace linter from `envoyproxy/toolshed`.
 
 ## Build locally
 
