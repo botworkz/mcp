@@ -2,28 +2,22 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := containers
 
+EARTHLY ?= earthly
 VERSION := $(shell [ -f ../VERSION ] && tr -d '[:space:]' < ../VERSION || echo 0.0.0-dev)
 GHCR_PREFIX := ghcr.io/botworkz/mcp
 
 SERVICES := mcp-echo
 
-.PHONY: containers tarballs clean $(SERVICES)
+.PHONY: containers tarballs clean
 
-define tag_image
+containers:
+	$(EARTHLY) +images
 	@if [ -n "$(VERSION)" ]; then \
-		docker tag botwork/$(1):local $(GHCR_PREFIX)/$(1):$(VERSION); \
-		docker tag botwork/$(1):local $(GHCR_PREFIX)/$(1):latest; \
+		for svc in $(SERVICES); do \
+			docker tag botwork/$$svc:local $(GHCR_PREFIX)/$$svc:$(VERSION); \
+			docker tag botwork/$$svc:local $(GHCR_PREFIX)/$$svc:latest; \
+		done; \
 	fi
-endef
-
-containers: $(SERVICES)
-
-mcp-echo:
-	docker build \
-		-t botwork/$@:local \
-		-f $@/Dockerfile \
-		..
-	$(call tag_image,$@)
 
 tarballs: containers
 	mkdir -p dist

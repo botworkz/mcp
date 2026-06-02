@@ -1,0 +1,13 @@
+.git
+.github
+**/target
+**/*.log
+.dockerignore
+.gitignore
+LICENSE
+Makefile
+README.md
+VERSION
+containers/README.md
+containers/Makefile
+containers/dist
