@@ -19,7 +19,7 @@ jobs:
       CRATE: ${{ inputs.crate }}
       SERVICE: mcp-${{ inputs.crate }}
       BINARY: botwork-mcp-${{ inputs.crate }}
-      DOCKERFILE: containers/mcp-${{ inputs.crate }}/Dockerfile
+      DOCKERFILE: ${{ inputs.crate }}/Dockerfile
 
     steps:
     - uses: actions/checkout@v4
