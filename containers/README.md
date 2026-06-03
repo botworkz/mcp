@@ -27,7 +27,7 @@ Build the image locally with:
 earthly +mcp-echo-image
 ```
 
-This uses the repository root as the Docker build context, matching `docker build -f containers/mcp-echo/Dockerfile .`, and produces `botwork/mcp-echo:local`.
+This uses the repository root as the Docker build context, matching `docker build -f echo/Dockerfile .`, and produces `botwork/mcp-echo:local`.
 
 CI and release builds can reuse a prebuilt crate binary instead of rebuilding inside Docker:
 
@@ -58,4 +58,5 @@ ghcr.io/botworkz/mcp/<svc>
 ```
 
 When adding a new crate, add its directory name to the crate matrix in `.github/workflows/ci.yml`,
+add a `<crate>/Dockerfile` in the crate directory,
 then add the matching `mcp-<crate>` entries in the Earthfile and container Makefile.
