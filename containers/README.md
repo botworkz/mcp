@@ -29,6 +29,12 @@ earthly +mcp-echo-image
 
 This uses the repository root as the Docker build context, matching `docker build -f containers/mcp-echo/Dockerfile .`, and produces `botwork/mcp-echo:local`.
 
+CI and release builds can reuse a prebuilt crate binary instead of rebuilding inside Docker:
+
+```bash
+earthly --push +mcp-echo-image --BINARY_SOURCE=prebuilt --TAG=<version>
+```
+
 To build every EarthBuild image target in this repository, run `earthly +images`.
 
 The `+mcp-echo-image` target name and `botwork/mcp-echo:local` tag are a stable contract: sibling/local builds in `botworkz/vm` consumes this target via `FROM ../mcp+mcp-echo-image`.
@@ -50,3 +56,6 @@ Published images live at:
 ```text
 ghcr.io/botworkz/mcp/<svc>
 ```
+
+When adding a new crate, add its directory name to the crate matrix in `.github/workflows/ci.yml`,
+then add the matching `mcp-<crate>` entries in the Earthfile and container Makefile.
