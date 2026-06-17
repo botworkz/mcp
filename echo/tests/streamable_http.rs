@@ -104,9 +104,40 @@ async fn initialize_and_echo_tool_call_roundtrip() -> anyhow::Result<()> {
     assert_eq!(tool_call.status(), 200);
     let tool_body = tool_call.text().await?;
     let tool_json = extract_jsonrpc_sse_payload(&tool_body);
+    eprintln!("PARSED tool_json: {tool_json:#?}");
 
     assert_eq!(tool_json["id"], 2);
-    assert_eq!(tool_json["result"]["content"][0]["text"], "hello over mcp");
+
+    // The echo tool now returns a `Json<EchoResponse>` wrapper which rmcp
+    // routes into the `structured_content` field on the CallToolResult.
+    // `content` still carries a text rendering of the same JSON for clients
+    // that haven't migrated, so this test asserts both surfaces.
+    let structured = &tool_json["result"]["structuredContent"];
+    assert_eq!(
+        structured["message"], "hello over mcp",
+        "structuredContent.message should round-trip the input"
+    );
+    assert_eq!(structured["plugin"], "mcp-echo");
+    assert!(
+        structured["version"].is_string(),
+        "structuredContent.version should be present (got {structured:?})"
+    );
+    assert!(
+        structured["env"].is_array(),
+        "structuredContent.env should be an array"
+    );
+
+    // The text content mirror is documented as containing the same JSON
+    // serialised once. The exact string form doesn't matter to clients that
+    // parse `structured_content`, but assert it at least mentions the message
+    // so a regression to a stringly-typed echo would fail loudly.
+    let text = tool_json["result"]["content"][0]["text"]
+        .as_str()
+        .expect("text content present");
+    assert!(
+        text.contains("hello over mcp"),
+        "text content should include the echoed message: {text}"
+    );
 
     shutdown.cancel();
     server.await??;
