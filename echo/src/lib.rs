@@ -1,3 +1,12 @@
+// Workspace-wide policy: no `unsafe` in production code. This crate
+// is a single-file rmcp server with no FFI surface, so the policy is
+// trivially satisfied today; `forbid` (vs `deny`) locks that in —
+// a future PR that wants `unsafe` has to first land a stand-alone
+// commit removing this attribute, which gets reviewed on its own
+// merits. Mirrors `botworkz/botwork`'s workspace-level
+// `unsafe_code = "forbid"` lint.
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::sync::{Once, OnceLock};
 
