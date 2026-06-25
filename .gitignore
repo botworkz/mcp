@@ -19,4 +19,4 @@ env/
 /.venv-wheelbuild/
 
 # Rust build artifacts
-/echo/target/
+**/target/
