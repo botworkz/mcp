@@ -51,6 +51,8 @@ jobs:
         cargo test --locked
 
     - name: cargo build
+      env:
+        BOTWORK_GIT_SHA: ${{ github.sha }}
       run: |
         set -euo pipefail
         cd "$CRATE"
@@ -73,16 +75,58 @@ jobs:
         set -euo pipefail
         install -D -m 0755 "$CRATE/target/release/$BINARY" ".ci-prebuilt/$CRATE/$BINARY"
 
+    - name: Read VERSION
+      id: version
+      run: |
+        set -euo pipefail
+        echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
+
     - name: Build runtime image
+      env:
+        BOTWORK_VERSION: ${{ steps.version.outputs.version }}
       run: |
         set -euo pipefail
         docker buildx build \
           --platform linux/amd64 \
           --load \
           --build-arg BINARY_SOURCE=prebuilt \
+          --build-arg "GIT_SHA=${GITHUB_SHA}" \
+          --build-arg "BOTWORK_VERSION=${BOTWORK_VERSION}" \
+          --build-arg "BOTWORK_GIT_SHA=${GITHUB_SHA}" \
           -t "botwork/$SERVICE:ci" \
           -f "$DOCKERFILE" \
           .
+
+    - name: Verify OCI labels
+      env:
+        BOTWORK_VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        set -euo pipefail
+        image="botwork/${SERVICE}:ci"
+        expect_source="https://github.com/botworkz/mcp"
+        actual_version="$(docker image inspect "$image" \
+          --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')"
+        actual_revision="$(docker image inspect "$image" \
+          --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+        actual_source="$(docker image inspect "$image" \
+          --format '{{ index .Config.Labels "org.opencontainers.image.source" }}')"
+        fail=0
+        if [ "$actual_version" != "$BOTWORK_VERSION" ]; then
+          echo "::error::image.version mismatch on $image: expected '$BOTWORK_VERSION', got '$actual_version'"
+          fail=1
+        fi
+        if [ "$actual_revision" != "$GITHUB_SHA" ]; then
+          echo "::error::image.revision mismatch on $image: expected '$GITHUB_SHA', got '$actual_revision'"
+          fail=1
+        fi
+        if [ "$actual_source" != "$expect_source" ]; then
+          echo "::error::image.source mismatch on $image: expected '$expect_source', got '$actual_source'"
+          fail=1
+        fi
+        if [ "$fail" -ne 0 ]; then
+          exit 1
+        fi
+        echo "OCI labels OK on $image: version=$actual_version revision=${actual_revision:0:7} source=$actual_source"
 
     - name: Smoke test image
       run: |
@@ -107,6 +151,27 @@ jobs:
           docker logs "$cid" || true
           exit 1
         fi
+
+        # Version banner: assert botwork-mcp-echo <ver>[+<sha>] is in the log.
+        banner="$(docker logs "$cid" 2>&1 | grep -oE 'botwork-mcp-echo [^[:space:]]+' | head -n1 || true)"
+        echo "version banner: $banner"
+        if [ -z "$banner" ]; then
+          echo "::error::no botwork-mcp-echo version banner in container log"
+          docker logs "$cid" || true
+          exit 1
+        fi
+
+        # If VERSION is dev, require a +<short-sha> suffix.
+        version="$(tr -d '[:space:]' < VERSION)"
+        case "$version" in
+          *-dev*)
+            if ! printf '%s\n' "$banner" | grep -qE '\+[0-9a-f]{7}'; then
+              echo "::error::dev VERSION '$version' but banner lacks +<sha>: '$banner'"
+              docker logs "$cid" || true
+              exit 1
+            fi
+            ;;
+        esac
 
         code="$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18000/mcp || true)"
         echo "smoke http code: $code"
