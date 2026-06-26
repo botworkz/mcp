@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
+botwork-version = { git = "https://github.com/botworkz/botwork", tag = "v0.3.16" }
 axum = "0.8"
 http = "1"
 rmcp = { version = "0.17.0", default-features = false, features = ["server", "transport-streamable-http-server", "macros", "schemars"] }
