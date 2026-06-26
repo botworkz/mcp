@@ -56,6 +56,7 @@ When adding a new crate/containerized service, update:
 1. the crate directory and `<crate>/Dockerfile`
 2. the crate matrix and publish loop in `.github/workflows/ci.yml`
 3. image targets in `Earthfile` (including `+images`)
+4. the crate's `mcp-package.yaml` (producer-side plugin descriptor — see [`botworkz/space#303`](https://github.com/botworkz/space/issues/303))
 
 ## Versioning
 

@@ -26,6 +26,7 @@ on:
     - '**/Cargo.toml'
     - '**/Cargo.lock'
     - echo/**
+    - echo/mcp-package.yaml
   pull_request:
     branches: [main]
     paths:
@@ -37,6 +38,7 @@ on:
     - '**/Cargo.toml'
     - '**/Cargo.lock'
     - echo/**
+    - echo/mcp-package.yaml
   workflow_dispatch:
   release:
     types: [published]
@@ -145,6 +147,52 @@ jobs:
             --BOTWORK_VERSION="${VERSION}" \
             --BOTWORK_GIT_SHA="${GITHUB_SHA}"
         done
+
+    # TODO: fold into Earthfile once earthly supports label injection
+    # without a layer rebuild (tracked in botworkz/botwork Earthfile
+    # refactor task). Until then, crane-mutate the pushed config blob
+    # in place — layers unchanged, ~100ms per image.
+    - name: Pull pushed image for relabeling
+      if: steps.version.outputs.is_release == 'true'
+      run: |
+        set -euo pipefail
+        for crate in echo; do
+          docker pull "ghcr.io/botworkz/mcp/mcp-${crate}:${{ steps.version.outputs.version }}"
+          docker tag \
+            "ghcr.io/botworkz/mcp/mcp-${crate}:${{ steps.version.outputs.version }}" \
+            "botwork/mcp-${crate}:to-label"
+        done
+
+    - name: Generate org.botwork.mcp.* labels on published image
+      if: steps.version.outputs.is_release == 'true'
+      uses: botworkz/botwork/actions/mcp-probe@v0.3.17
+      with:
+        mode: generate
+        image: botwork/mcp-echo:to-label
+        package: echo/mcp-package.yaml
+        out: ghcr.io/botworkz/mcp/mcp-echo:${{ steps.version.outputs.version }}
+        tools_version: v0.3.17
+
+    - name: Re-push labeled image to GHCR
+      if: steps.version.outputs.is_release == 'true'
+      run: |
+        set -euo pipefail
+        # crane mutate (used by mcp-probe generate) wrote the new
+        # config-blob to the local daemon under the GHCR tag; push
+        # the relabeled tag to clobber the unlabeled one in the
+        # registry. Layers unchanged → fast.
+        for crate in echo; do
+          docker push "ghcr.io/botworkz/mcp/mcp-${crate}:${{ steps.version.outputs.version }}"
+        done
+
+    - name: Verify published image labels
+      if: steps.version.outputs.is_release == 'true'
+      uses: botworkz/botwork/actions/mcp-probe@v0.3.17
+      with:
+        mode: verify
+        image: ghcr.io/botworkz/mcp/mcp-echo:${{ steps.version.outputs.version }}
+        package: echo/mcp-package.yaml
+        tools_version: v0.3.17
 
     - name: Collect release files
       if: steps.version.outputs.is_release == 'true'
