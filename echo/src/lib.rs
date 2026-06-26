@@ -34,6 +34,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+/// Trimmed contents of the workspace-root `/VERSION` file, baked in
+/// at compile time. The path is relative to *this* source file:
+/// `echo/src/lib.rs` → `../../VERSION`.
+const VERSION: &str = include_str!("../../VERSION").trim_ascii();
+
 pub const LOG_PREFIX: &str = "[mcp-echo]";
 pub const REQUEST_SEPARATOR: &str = "─── request ────────────────────────────────────────";
 
@@ -249,6 +254,10 @@ pub async fn run() -> anyhow::Result<()> {
     // (and the startup log line below) sees the same view, even if something
     // else in the process happens to set env vars before the first call.
     let _ = startup_env();
+    tracing::info!(
+        "botwork-mcp-echo {}",
+        botwork_version::format_full(VERSION, botwork_version::GIT_SHA),
+    );
     info!("{LOG_PREFIX} starting on 0.0.0.0:8000/mcp");
 
     let listener = TcpListener::bind("0.0.0.0:8000").await?;

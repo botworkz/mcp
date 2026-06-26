@@ -56,3 +56,36 @@ When adding a new crate/containerized service, update:
 1. the crate directory and `<crate>/Dockerfile`
 2. the crate matrix and publish loop in `.github/workflows/ci.yml`
 3. image targets in `Earthfile` (including `+images`)
+
+## Versioning
+
+The repo-root `/VERSION` file is the source of truth. Each crate inlines
+its contents at compile time via `include_str!`, and the published
+`botwork-version` crate (cross-repo git dep) formats it into a
+`<version>[+<sha>]` string for daemon startup logs.
+
+On dev branches CI populates `BOTWORK_GIT_SHA` from `$GITHUB_SHA`, and
+the startup banner emits e.g.:
+
+```
+botwork-mcp-echo 0.2.0-dev+abc1234
+```
+
+On clean releases the sha is suppressed:
+
+```
+botwork-mcp-echo 0.1.3
+```
+
+Container images carry the OCI standard labels for introspection
+without booting the container:
+
+```bash
+docker image inspect ghcr.io/botworkz/mcp/mcp-echo:0.1.3 \
+  --format '{{ json .Config.Labels }}' | jq
+# {
+#   "org.opencontainers.image.revision": "<full-git-sha>",
+#   "org.opencontainers.image.source": "https://github.com/botworkz/mcp",
+#   "org.opencontainers.image.version": "0.1.3"
+# }
+```

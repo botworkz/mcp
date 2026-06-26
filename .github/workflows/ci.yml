@@ -106,7 +106,12 @@ jobs:
           service="mcp-${crate}"
           binary="botwork-mcp-${crate}"
           install -D -m 0755 ".ci-artifacts/${crate}-binary/${binary}" ".ci-prebuilt/${crate}/${binary}"
-          earthly --push "+${service}-image" --BINARY_SOURCE=prebuilt --TAG="${VERSION}"
+          earthly --push "+${service}-image" \
+            --BINARY_SOURCE=prebuilt \
+            --TAG="${VERSION}" \
+            --GIT_SHA="${GITHUB_SHA}" \
+            --BOTWORK_VERSION="${VERSION}" \
+            --BOTWORK_GIT_SHA="${GITHUB_SHA}"
         done
 
     - name: Collect release files
