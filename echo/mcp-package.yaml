@@ -1,0 +1,33 @@
+# Producer-side package descriptor for mcp-echo.
+#
+# Consumed by `botwork-tools mcp-probe` (RFE botworkz/space#303 Phase 1,
+# tracked from botworkz/botwork#147) to compose the `org.botwork.mcp.*`
+# label set that ships on the published container image.
+#
+# Schema lives in `botwork-admin-core::package::PackageFileEntry`:
+# https://github.com/botworkz/botwork/blob/main/admin-core/src/package.rs
+# — deny_unknown_fields at every level, validated by the same regexes
+# bootstrap.yaml plugin entries use.
+
+name: echo
+port: 8000
+path: /mcp
+upstream_auth: none
+
+# Isolation: shared. mcp-echo holds no per-session state (the
+# startup-env snapshot is process-wide and identical for every
+# caller), so one container per (tenant, workspace) is correct.
+# Operators can strictness-tighten to per_agent_session via
+# bootstrap.yaml override; the reverse direction is rejected at
+# bootstrap parse time per RFE.
+isolation: shared
+
+# Egress: none. The echo handler is in-process — no DNS, no HTTP,
+# no socket calls outside the inbound axum listener. Anything that
+# tries to reach the network is a bug.
+egress: none
+
+# Spill: never. Echo responses are bounded by env-snapshot size
+# (~few KB) and inline trivially under any session-broker cap.
+spill:
+  mode: never

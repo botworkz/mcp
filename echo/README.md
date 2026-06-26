@@ -48,3 +48,12 @@ ordering.
 
 This crate is the runtime payload for the repository's `mcp-echo`
 container image.
+
+## Plugin descriptor
+
+`echo/mcp-package.yaml` declares the producer-side fields (`isolation`,
+`egress`, `spill`) that combine with the live MCP `tools/list` catalog
+to form the `org.botwork.mcp.*` label set on the published image. The
+labels are emitted by `botwork-tools mcp-probe` in CI; see
+[`botworkz/space#303`](https://github.com/botworkz/space/issues/303)
+for the workspace-aggregation RFE this is Phase 1 of.
