@@ -5,11 +5,11 @@
 # - To cut a release, update VERSION to MAJOR.MINOR.PATCH (no suffix) and merge to main.
 # - publish builds and pushes ghcr.io/botworkz/mcp/mcp-echo:${VERSION} and
 #   creates a GitHub Release for v${VERSION} with botwork-mcp-echo attached.
-# - On release: [published], bump advances VERSION to the next minor -dev
+# - On release: [published], the bump job advances VERSION to the next minor -dev
 #   and pushes back to main.
 # - If a clean VERSION sits on main for more than one push (e.g. a chore
 #   commit lands before the next -dev bump), the publish job's Read VERSION
-#   step probes the GitHub Releases API for v${VERSION} and warn-and-bails
+#   step probes the GitHub Releases API for v${VERSION} and warns and bails
 #   on collision rather than silently overwriting the GHCR tag or re-
 #   uploading release assets.
 name: CI
