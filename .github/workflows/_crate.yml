@@ -275,8 +275,8 @@ jobs:
     - name: Container logs and teardown
       if: always()
       run: |
-        docker logs "$cid" || true
-        docker rm -f "$cid" || true
+        [ -n "${cid:-}" ] && docker logs "$cid" || true
+        [ -n "${cid:-}" ] && docker rm -f "$cid" || true
 
     - uses: actions/upload-artifact@v4
       with:
