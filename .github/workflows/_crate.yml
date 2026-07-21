@@ -128,14 +128,11 @@ jobs:
         fi
         echo "OCI labels OK on $image: version=$actual_version revision=${actual_revision:0:7} source=$actual_source"
 
-    - name: Smoke test image
+    - name: Start runtime image
       run: |
         set -euo pipefail
         cid="$(docker run -d --rm -p 18000:8000 "botwork/$SERVICE:ci")"
-        cleanup() {
-          docker rm -f "$cid" >/dev/null 2>&1 || true
-        }
-        trap cleanup EXIT
+        echo "cid=$cid" >> "$GITHUB_ENV"
 
         ready=false
         for _ in $(seq 1 30); do
@@ -152,11 +149,11 @@ jobs:
           exit 1
         fi
 
-        # Version banner: assert botwork-mcp-echo <ver>[+<sha>] is in the log.
-        banner="$(docker logs "$cid" 2>&1 | grep -oE 'botwork-mcp-echo [^[:space:]]+' | head -n1 || true)"
+        # Version banner: assert <binary> <ver>[+<sha>] is in the log.
+        banner="$(docker logs "$cid" 2>&1 | grep -oE "$BINARY [^[:space:]]+" | head -n1 || true)"
         echo "version banner: $banner"
         if [ -z "$banner" ]; then
-          echo "::error::no botwork-mcp-echo version banner in container log"
+          echo "::error::no $BINARY version banner in container log"
           docker logs "$cid" || true
           exit 1
         fi
@@ -173,14 +170,113 @@ jobs:
             ;;
         esac
 
-        code="$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:18000/mcp || true)"
-        echo "smoke http code: $code"
-        if [ -z "$code" ] || [ "$code" = "000" ]; then
+    - name: MCP initialize
+      id: initialize
+      run: |
+        set -euo pipefail
+        base="http://127.0.0.1:18000/mcp"
+        hdrs="$(mktemp)"
+        body="$(curl -sS -D "$hdrs" \
+          -H 'Content-Type: application/json' \
+          -H 'Accept: application/json, text/event-stream' \
+          -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"1.0"}}}' \
+          "$base")"
+        echo "initialize raw response:"
+        echo "$body"
+        sid="$(grep -i '^mcp-session-id:' "$hdrs" | sed 's/^[^:]*: *//' | tr -d '\r')"
+        if [ -z "$sid" ]; then
+          echo "::error::initialize returned no mcp-session-id"
+          docker logs "$cid" || true
+          exit 1
+        fi
+        payload="$(echo "$body" | grep '^data: ' | tail -n1 | sed 's/^data: //')"
+        echo "session-id=$sid" >> "$GITHUB_OUTPUT"
+        echo "payload=$payload" >> "$GITHUB_OUTPUT"
+
+    - name: Assert initialize payload
+      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.3.26
+      with:
+        input: ${{ steps.initialize.outputs.payload }}
+        filter: |
+          if (.id == 1) and (.result.serverInfo.name | (. != null and . != ""))
+          then "ok"
+          else error("initialize payload assertion failed: \(.)")
+          end
+
+    - name: MCP initialized + tools/list + echo call
+      id: calls
+      run: |
+        set -euo pipefail
+        base="http://127.0.0.1:18000/mcp"
+        sid="${{ steps.initialize.outputs.session-id }}"
+
+        # notifications/initialized -> 202
+        code="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -H 'Content-Type: application/json' \
+          -H 'Accept: application/json, text/event-stream' \
+          -H "mcp-session-id: $sid" \
+          -d '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' \
+          "$base")"
+        echo "notifications/initialized HTTP code: $code"
+        if [ "$code" != "202" ]; then
+          echo "::error::notifications/initialized returned HTTP $code, want 202"
           docker logs "$cid" || true
           exit 1
         fi
 
-        docker logs "$cid"
+        # tools/list
+        tools_body="$(curl -sS \
+          -H 'Content-Type: application/json' \
+          -H 'Accept: application/json, text/event-stream' \
+          -H "mcp-session-id: $sid" \
+          -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+          "$base")"
+        echo "tools/list raw response:"
+        echo "$tools_body"
+        tools="$(echo "$tools_body" | grep '^data: ' | tail -n1 | sed 's/^data: //')"
+        echo "tools=$tools" >> "$GITHUB_OUTPUT"
+
+        # tools/call echo
+        echo_body="$(curl -sS \
+          -H 'Content-Type: application/json' \
+          -H 'Accept: application/json, text/event-stream' \
+          -H "mcp-session-id: $sid" \
+          -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"echo","arguments":{"message":"ci-smoke-hello"}}}' \
+          "$base")"
+        echo "tools/call echo raw response:"
+        echo "$echo_body"
+        echo_payload="$(echo "$echo_body" | grep '^data: ' | tail -n1 | sed 's/^data: //')"
+        echo "echo=$echo_payload" >> "$GITHUB_OUTPUT"
+
+    - name: Assert tools/list advertises echo
+      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.3.26
+      with:
+        input: ${{ steps.calls.outputs.tools }}
+        filter: |
+          if (.result.tools | map(.name) | index("echo")) != null
+          then "ok"
+          else error("tools/list does not advertise 'echo': \(.)")
+          end
+
+    - name: Assert echo tools/call round-trips
+      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.3.26
+      with:
+        input: ${{ steps.calls.outputs.echo }}
+        filter: |
+          if (.id == 3)
+            and (.result.structuredContent.message == "ci-smoke-hello")
+            and (.result.structuredContent.plugin == "mcp-echo")
+            and (.result.structuredContent.version | type == "string")
+            and (.result.structuredContent.env | type == "array")
+          then "ok"
+          else error("echo tools/call assertion failed: \(.)")
+          end
+
+    - name: Container logs and teardown
+      if: always()
+      run: |
+        docker logs "$cid" || true
+        docker rm -f "$cid" || true
 
     - uses: actions/upload-artifact@v4
       with:
