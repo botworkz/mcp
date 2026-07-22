@@ -46,5 +46,43 @@ The snapshot is sorted by name and de-duplicated so two equivalent
 invocations produce byte-identical responses regardless of process env
 ordering.
 
+## Host / Origin allowlists
+
+By default the rmcp streamable-HTTP transport only accepts requests whose
+`Host` header is a loopback authority. In the botwork deployment the
+launcher assigns a per-session container name (e.g.
+`mcp_session_<id>:8000`) as the forwarded authority, which is not
+localhost and would be rejected by the default allowlist.
+
+Two environment variables override the allowlist behaviour:
+
+| Variable | Purpose |
+| -------- | ------- |
+| `MCP_ALLOWED_HOSTS` | Comma-separated `host` or `host:port` authorities that the `Host` header is validated against. |
+| `MCP_ALLOWED_ORIGINS` | Comma-separated origins (with scheme, e.g. `https://app.example.com`) that the `Origin` header is validated against. |
+
+**Default (unset or empty) = bypass (allow all).** When either variable is
+unset, empty, or set to the literal `*`, the corresponding allowlist is
+empty. rmcp treats an empty list as "allow all" — the DNS-rebinding guard
+is bypassed. This is the intentional default behind the botwork edge
+(envoy + launcher), because the authority is a per-session launcher-
+assigned container name that cannot be predicted in advance.
+
+**Hardening mode** — set either variable to a comma-separated list of the
+specific values that should be permitted. Any request whose `Host` or
+`Origin` header does not appear in the list is rejected with `403
+Forbidden`.
+
+```
+# Example: restrict to a known hostname
+MCP_ALLOWED_HOSTS=my-plugin.internal:8000
+
+# Comma-separated list
+MCP_ALLOWED_HOSTS=my-plugin.internal:8000,localhost
+
+# Explicit bypass (same as unset)
+MCP_ALLOWED_HOSTS=*
+```
+
 This crate is the runtime payload for the repository's `mcp-echo`
 container image.
