@@ -1,4 +1,4 @@
-use botwork_mcp_echo::{init_logging, serve_with_listener};
+use botwork_mcp_echo::{init_logging, serve_with_listener, serve_with_listener_and_allowlists};
 use serde_json::json;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -137,6 +137,132 @@ async fn initialize_and_echo_tool_call_roundtrip() -> anyhow::Result<()> {
     assert!(
         text.contains("hello over mcp"),
         "text content should include the echoed message: {text}"
+    );
+
+    shutdown.cancel();
+    server.await??;
+    Ok(())
+}
+
+/// Regression: `initialize` with a non-localhost `Host` header must succeed
+/// when the server is configured with empty allowlists (allow-all / bypass).
+/// This reproduces the exact failure mode seen in the `botworkz/vm` deployment,
+/// where the launcher assigns a container-name authority such as
+/// `mcp_session_<id>:8000` as the request Host.
+#[tokio::test]
+async fn initialize_non_localhost_host_bypassed_with_empty_allowlist() -> anyhow::Result<()> {
+    init_logging();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    let shutdown = CancellationToken::new();
+    let child_shutdown = shutdown.child_token();
+
+    // Empty allowlists → rmcp bypasses DNS-rebinding validation (allow all).
+    let server = tokio::spawn(async move {
+        serve_with_listener_and_allowlists(listener, child_shutdown, vec![], vec![]).await
+    });
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{addr}/mcp");
+
+    let initialize = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json, text/event-stream")
+        .header("Host", "mcp_session_test:8000")
+        .body(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "non-localhost-host-test", "version": "1.0"}
+                }
+            })
+            .to_string(),
+        )
+        .send()
+        .await?;
+
+    assert_eq!(
+        initialize.status(),
+        200,
+        "initialize with non-localhost Host must succeed when allowlists are empty (bypass mode)"
+    );
+
+    let session_id = initialize
+        .headers()
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .expect("mcp-session-id header must be present in initialize response")
+        .to_string();
+    assert!(!session_id.is_empty(), "mcp-session-id must be non-empty");
+
+    let body = initialize.text().await?;
+    let init_json = extract_jsonrpc_sse_payload(&body);
+    assert_eq!(
+        init_json["id"], 1,
+        "JSON-RPC response id must match request id"
+    );
+
+    shutdown.cancel();
+    server.await??;
+    Ok(())
+}
+
+/// When `allowed_hosts` is a non-empty list that does NOT include the request's
+/// `Host` authority, rmcp must reject the request (hardening mode).
+#[tokio::test]
+async fn initialize_non_localhost_host_rejected_when_not_in_allowlist() -> anyhow::Result<()> {
+    init_logging();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+    let shutdown = CancellationToken::new();
+    let child_shutdown = shutdown.child_token();
+
+    // Restrict to a specific host that is NOT "mcp_session_test:8000".
+    let server = tokio::spawn(async move {
+        serve_with_listener_and_allowlists(
+            listener,
+            child_shutdown,
+            vec!["example.com:8000".to_string()],
+            vec![],
+        )
+        .await
+    });
+
+    let client = reqwest::Client::new();
+    let url = format!("http://{addr}/mcp");
+
+    let initialize = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json, text/event-stream")
+        .header("Host", "mcp_session_test:8000")
+        .body(
+            json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "allowlist-hardening-test", "version": "1.0"}
+                }
+            })
+            .to_string(),
+        )
+        .send()
+        .await?;
+
+    assert_ne!(
+        initialize.status().as_u16(),
+        200,
+        "initialize with a Host not in the allowlist must be rejected (got 200 but expected 4xx)"
     );
 
     shutdown.cancel();

@@ -218,17 +218,67 @@ pub async fn request_logging_middleware(request: Request<Body>, next: Next) -> R
     next.run(replay).await
 }
 
-pub fn build_router() -> Router {
+/// Parse a raw allowlist string value into a `Vec<String>`.
+///
+/// Semantics (default = bypass / allow-all):
+/// - Empty string or whitespace-only → `[]` (rmcp treats an empty list as
+///   "allow all", bypassing the DNS-rebinding guard).
+/// - `"*"` → `[]` (explicit allow-all alias).
+/// - Otherwise: split on `,`, trim each token, drop empty tokens, return the
+///   resulting list. Only those hosts/origins will be accepted.
+pub fn parse_allowlist(val: &str) -> Vec<String> {
+    let trimmed = val.trim();
+    if trimmed.is_empty() || trimmed == "*" {
+        return vec![];
+    }
+    trimmed
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn read_allowlist(var: &str) -> Vec<String> {
+    std::env::var(var)
+        .map(|v| parse_allowlist(&v))
+        .unwrap_or_default()
+}
+
+/// Build the axum router with explicit host/origin allowlists.
+///
+/// Pass empty `Vec`s to disable DNS-rebinding validation entirely (allow all).
+/// This is the preferred entry point for tests, which inject allowlists
+/// directly instead of relying on process environment.
+pub fn build_router_with_allowlists(
+    allowed_hosts: Vec<String>,
+    allowed_origins: Vec<String>,
+) -> Router {
+    let config = StreamableHttpServerConfig::default()
+        .with_allowed_hosts(allowed_hosts)
+        .with_allowed_origins(allowed_origins);
     let service: StreamableHttpService<EchoServer, LocalSessionManager> =
-        StreamableHttpService::new(
-            || Ok(EchoServer::new()),
-            Default::default(),
-            StreamableHttpServerConfig::default(),
-        );
+        StreamableHttpService::new(|| Ok(EchoServer::new()), Default::default(), config);
 
     Router::new()
         .nest_service("/mcp", service)
         .layer(from_fn(request_logging_middleware))
+}
+
+/// Build the axum router, reading allowlists from environment variables.
+///
+/// - `MCP_ALLOWED_HOSTS`: comma-separated allowed `Host` authorities.
+/// - `MCP_ALLOWED_ORIGINS`: comma-separated allowed `Origin` values.
+///
+/// If either variable is unset, empty, or set to `"*"`, the corresponding
+/// allowlist is empty, meaning rmcp accepts requests with any value for that
+/// header (bypass / allow-all). This is the default so that the launcher
+/// needs no changes.
+pub fn build_router() -> Router {
+    build_router_with_allowlists(
+        read_allowlist("MCP_ALLOWED_HOSTS"),
+        read_allowlist("MCP_ALLOWED_ORIGINS"),
+    )
 }
 
 pub async fn serve_with_listener(
@@ -238,6 +288,25 @@ pub async fn serve_with_listener(
     axum::serve(listener, build_router())
         .with_graceful_shutdown(async move { shutdown.cancelled_owned().await })
         .await?;
+    Ok(())
+}
+
+/// Like [`serve_with_listener`] but with explicitly provided allowlists rather
+/// than reading from env vars. Intended for integration tests that need to
+/// exercise specific allowlist configurations without mutating the process
+/// environment.
+pub async fn serve_with_listener_and_allowlists(
+    listener: TcpListener,
+    shutdown: CancellationToken,
+    allowed_hosts: Vec<String>,
+    allowed_origins: Vec<String>,
+) -> anyhow::Result<()> {
+    axum::serve(
+        listener,
+        build_router_with_allowlists(allowed_hosts, allowed_origins),
+    )
+    .with_graceful_shutdown(async move { shutdown.cancelled_owned().await })
+    .await?;
     Ok(())
 }
 
@@ -357,6 +426,49 @@ mod tests {
             "no-trailing-underscore-still-not-prefix"
         );
     }
+
+    // ── parse_allowlist ──────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_allowlist_empty_string_returns_empty() {
+        assert_eq!(parse_allowlist(""), Vec::<String>::new());
+    }
+
+    #[test]
+    fn parse_allowlist_whitespace_only_returns_empty() {
+        assert_eq!(parse_allowlist("  "), Vec::<String>::new());
+    }
+
+    #[test]
+    fn parse_allowlist_star_returns_empty() {
+        assert_eq!(parse_allowlist("*"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn parse_allowlist_splits_trims_and_drops_empty_entries() {
+        assert_eq!(
+            parse_allowlist("a, b ,c"),
+            vec!["a".to_string(), "b".to_string(), "c".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_allowlist_trims_leading_trailing_commas() {
+        assert_eq!(
+            parse_allowlist(",a,,b,"),
+            vec!["a".to_string(), "b".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_allowlist_single_entry_trimmed() {
+        assert_eq!(
+            parse_allowlist("  localhost:8000  "),
+            vec!["localhost:8000".to_string()]
+        );
+    }
+
+    // ── capture_startup_env ──────────────────────────────────────────────────
 
     #[test]
     fn capture_startup_env_is_sorted_and_unique() {
