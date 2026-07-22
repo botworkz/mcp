@@ -1,7 +1,7 @@
 ARG BINARY_SOURCE=source
 
 
-FROM rust:1.89-bookworm AS builder
+FROM rust:1.97-bookworm AS builder
 WORKDIR /workspace/echo
 COPY echo /workspace/echo
 COPY VERSION /workspace
