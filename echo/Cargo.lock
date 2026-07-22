@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "botwork-version"
 version = "0.0.0"
-source = "git+https://github.com/botworkz/botwork?tag=v0.3.16#2540a17115099c1e0942ae578e962c448b8b8088"
+source = "git+https://github.com/botworkz/botwork?tag=v0.4.10#7b8893dcfda057adf03cc6f477500c19deb5ecba"
 
 [[package]]
 name = "bumpalo"
