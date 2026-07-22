@@ -239,6 +239,15 @@ pub fn parse_allowlist(val: &str) -> Vec<String> {
         .collect()
 }
 
+/// Read an env var and parse it as an allowlist.
+///
+/// Thin wrapper over [`parse_allowlist`], which has full unit-test coverage for
+/// every semantic case. The env-reading path (var present / var absent) is
+/// exercised by the `serve_with_listener`-based integration tests that call
+/// `build_router()` → `read_allowlist()` with the actual process environment.
+/// Dedicated env-mutation unit tests are intentionally omitted because
+/// [`std::env::set_var`] / [`std::env::remove_var`] are not safe to call from
+/// concurrent test threads.
 fn read_allowlist(var: &str) -> Vec<String> {
     std::env::var(var)
         .map(|v| parse_allowlist(&v))

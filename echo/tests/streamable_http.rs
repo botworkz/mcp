@@ -259,10 +259,10 @@ async fn initialize_non_localhost_host_rejected_when_not_in_allowlist() -> anyho
         .send()
         .await?;
 
-    assert_ne!(
+    assert_eq!(
         initialize.status().as_u16(),
-        200,
-        "initialize with a Host not in the allowlist must be rejected (got 200 but expected 4xx)"
+        403,
+        "initialize with a Host not in the allowlist must be rejected with 403 Forbidden"
     );
 
     shutdown.cancel();
