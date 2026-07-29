@@ -22,7 +22,7 @@ jobs:
       DOCKERFILE: ${{ inputs.crate }}/Dockerfile
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
@@ -30,7 +30,7 @@ jobs:
       with:
         workspaces: |
           ${{ inputs.crate }}
-    - uses: docker/setup-buildx-action@v3
+    - uses: docker/setup-buildx-action@v4
 
     - name: cargo fmt
       run: |
@@ -195,7 +195,7 @@ jobs:
         echo "payload=$payload" >> "$GITHUB_OUTPUT"
 
     - name: Assert initialize payload
-      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.3.26
+      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.4.19
       with:
         input: ${{ steps.initialize.outputs.payload }}
         filter: |
@@ -251,7 +251,7 @@ jobs:
         echo "echo=$echo_payload" >> "$GITHUB_OUTPUT"
 
     - name: Assert tools/list advertises echo
-      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.3.26
+      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.4.19
       with:
         input: ${{ steps.calls.outputs.tools }}
         filter: |
@@ -261,7 +261,7 @@ jobs:
           end
 
     - name: Assert echo tools/call round-trips
-      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.3.26
+      uses: envoyproxy/toolshed/gh-actions/jq@actions-v0.4.19
       with:
         input: ${{ steps.calls.outputs.echo }}
         filter: |
@@ -280,7 +280,7 @@ jobs:
         [ -n "${cid:-}" ] && docker logs "$cid" || true
         [ -n "${cid:-}" ] && docker rm -f "$cid" || true
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.crate }}-binary
         path: ${{ env.CRATE }}/target/release/${{ env.BINARY }}
